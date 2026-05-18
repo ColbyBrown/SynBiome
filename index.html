@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synbiome Garden</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Swap fonts for a botanical, field-journal aesthetic -->
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inconsolata:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            /* Persistent UI Theme: Bioluminescent Chlorophyll */
+            --ui-accent: #a3e635; 
+            --ui-glow: rgba(163, 230, 53, 0.4);
+            --ui-bg: rgba(15, 25, 20, 0.4); /* Swampy, membranous dark background */
+            --cell-wall: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            font-family: 'Cormorant Garamond', serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            overscroll-behavior: none;
+            background-image: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.03), transparent 70%);
+            font-size: 1.1rem;
+        }
+        .mono { font-family: 'Inconsolata', monospace; font-size: 1rem; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px 2px 10px 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--ui-accent); }
+        
+        #sim-canvas {
+            cursor: crosshair;
+        }
+
+        /* --- ORGANIC UI CLASSES --- */
+        
+        /* Simulates irregular, hand-drawn cell walls instead of perfect rectangles */
+        .organic-panel {
+            background: var(--ui-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 3px 30px 5px 20px / 20px 5px 30px 3px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid var(--cell-wall);
+        }
+
+        .organic-subpanel {
+            border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+            border: 1px solid var(--cell-wall);
+        }
+
+        /* Seed-like buttons that subtly morph shape on hover */
+        .organic-btn {
+            border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+            transition: all 0.4s ease;
+        }
+        .organic-btn:hover {
+            border-radius: 60% 40% 30% 70% / 50% 60% 40% 50%;
+        }
+        
+        /* Organic Range Slider (Vines/Tendrils) */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: var(--cell-wall);
+            height: 4px;
+            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 18px;
+            /* Leaf/Seed shape */
+            border-radius: 0% 100% 50% 50% / 0% 50% 50% 100%;
+            transform: rotate(45deg);
+            background: var(--ui-accent);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--ui-glow);
+            transition: transform 0.2s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: rotate(45deg) scale(1.3);
+        }
+
+        /* Organic Toggle Switch */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: var(--ui-accent);
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: var(--ui-accent);
+            box-shadow: 0 0 15px var(--ui-glow);
+        }
+        /* Make the toggle housing look like a pod */
+        .toggle-label {
+            border-radius: 30px 10px 30px 15px / 15px 30px 10px 30px;
+        }
+        .toggle-checkbox {
+            border-radius: 50% 40% 60% 40%;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-8 px-4">
+
+    <header class="mb-8 text-center w-full max-w-6xl">
+        <h1 class="text-6xl font-bold italic text-[#f8fafc] tracking-wide mb-2 drop-shadow-lg" style="text-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+            Synbiome Garden
+        </h1>
+        <p id="biome-label" class="text-[#cbd5e1] text-lg tracking-wider opacity-90">Biome: Loading...</p>
+    </header>
+
+    <div class="flex flex-col md:flex-row gap-6 w-full max-w-6xl h-[700px]">
+        
+        <!-- Canvas Container (Cellular Panel) -->
+        <div class="flex-grow organic-panel p-5 flex flex-col relative overflow-hidden">
+            
+            <!-- Sleek Top Control Bar -->
+            <div class="flex justify-between items-center mb-5 bg-black/20 organic-subpanel p-3">
+                <div class="flex gap-3">
+                    <button id="btn-play" class="organic-btn bg-[var(--ui-accent)] text-black px-7 py-2.5 font-bold tracking-widest uppercase text-sm shadow-[0_0_20px_var(--ui-glow)]">▶ Wake</button>
+                    <button id="btn-pause" class="organic-btn bg-white/10 text-white px-7 py-2.5 font-bold tracking-widest uppercase text-sm hover:bg-white/20 hidden">⏸ Slumber</button>
+                </div>
+                
+                <div class="flex items-center gap-4 bg-black/20 px-5 py-2 organic-subpanel">
+                    <span class="text-sm text-[#94a3b8] italic">Flow Rate</span>
+                    <input type="range" id="bpm-slider" min="60" max="180" value="90" class="w-32">
+                    <span id="bpm-display" class="mono text-[var(--ui-accent)] font-bold text-lg w-8 text-right drop-shadow-md">90</span>
+                </div>
+                
+                <div class="bg-black/20 px-5 py-2 organic-subpanel text-[#94a3b8] text-sm italic">
+                    Cycle <span id="step-counter" class="text-[var(--ui-accent)] mono text-lg ml-2 drop-shadow-md">0</span><span class="opacity-50">/16</span>
+                </div>
+            </div>
+            
+            <!-- Canvas Window -->
+            <div class="relative flex-grow flex items-center justify-center bg-black/40 organic-subpanel overflow-hidden shadow-inner">
+                <canvas id="sim-canvas" width="600" height="600" class="max-w-full max-h-full object-contain"></canvas>
+            </div>
+        </div>
+
+        <!-- Interventions Panel (Cellular Panel) -->
+        <div class="w-full md:w-80 organic-panel p-6 flex flex-col overflow-y-auto">
+            <h2 class="text-xl italic font-bold mb-4 text-[#cbd5e1] border-b border-[var(--cell-wall)] pb-3">Interventions</h2>
+            
+            <!-- Tool Buttons -->
+            <div class="flex flex-col gap-3 mb-6">
+                <button id="tool-seed" class="tool-btn bg-black/20 organic-subpanel text-[#e2e8f0] px-5 py-4 font-semibold transition-all text-left flex justify-between items-center hover:bg-white/5">
+                    <span class="text-lg">🌱 Plant Spore</span>
+                </button>
+                <button id="tool-water" class="tool-btn bg-black/20 organic-subpanel text-[#e2e8f0] px-5 py-4 font-semibold transition-all text-left flex justify-between items-center hover:bg-white/5">
+                    <span class="text-lg">💧 Aether Drop</span>
+                </button>
+                <button id="tool-uproot" class="tool-btn bg-black/20 organic-subpanel text-[#e2e8f0] px-5 py-4 font-semibold transition-all text-left flex justify-between items-center hover:bg-white/5">
+                    <span class="text-lg">✖ Cull</span>
+                </button>
+            </div>
+
+            <!-- Climate Status -->
+            <div class="flex items-center justify-between mb-6 pb-6 border-b border-[var(--cell-wall)]">
+                <span class="text-lg text-[#cbd5e1] italic font-semibold">Climate</span>
+                <div id="weather-status" class="px-4 py-1.5 rounded-2xl text-[11px] font-bold tracking-widest uppercase border border-[var(--cell-wall)] bg-black/40 text-[#64748b] transition-all duration-500">
+                    Clear Skies
+                </div>
+            </div>
+
+            <!-- Inspection & Stats -->
+            <button id="tool-inspect" class="tool-btn w-full bg-black/20 organic-subpanel text-[#e2e8f0] px-5 py-3 font-semibold transition-all text-left flex justify-between items-center hover:bg-white/5 mb-4">
+                <span class="text-lg">🔍 Inspect Specimen</span>
+            </button>
+
+            <div id="selected-stats" class="text-sm text-[#94a3b8] hidden space-y-4">
+                <!-- Populated via JS -->
+            </div>
+            <div id="no-selection" class="text-lg text-[#64748b] italic text-center py-8 bg-black/10 organic-subpanel border border-[var(--cell-wall)]">
+                Observe an organism to transcribe its genome.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('sim-canvas');
+        const ctx = canvas.getContext('2d');
+
+        const GRID_SIZE = 40;
+        const CELL_SIZE = canvas.width / GRID_SIZE;
+        const MAX_AETHER = 100;
+
+        let grid = [];
+        let organisms = [];
+        let spores = [];
+        let statics = [];
+        let isRunning = false;
+        let activeTool = 'seed';
+        let selectedOrganism = null;
+        
+        let isRaining = false;
+        let weatherTimer = 100; // Ticks until first weather event
+
+        let currentStep = 0;
+        let sequencerEventId = null;
+        let globalTime = 0; // For continuous procedural animations
+        
+        let masterReverb = null;
+        let etherealReverb = null;
+        let audioInitialized = false;
+
+        // Wrap global effects in a lazy-loader to prevent browser autoplay policy errors
+        async function initAudio() {
+            if (audioInitialized) return;
+            try {
+                await Tone.start();
+                masterReverb = new Tone.Freeverb({
+                    roomSize: 0.75,
+                    dampening: 3000
+                }).toDestination();
+                masterReverb.wet.value = 0.15;
+
+                etherealReverb = new Tone.Freeverb({
+                    roomSize: 0.95,
+                    dampening: 1000
+                }).toDestination();
+                etherealReverb.wet.value = 0.6;
+
+                audioInitialized = true;
+            } catch (err) {
+                console.error("Audio setup blocked:", err);
+            }
+        }
+
+        // --- CORE CONSTANTS & HELPERS ---
+        const biomes = [
+            { name: "Midnight", scale: ["C", "D#", "F", "G", "A#"], empty: "#0f172a", aether: [20, 184, 166] },   // Slate / Teal
+            { name: "Daybreak", scale: ["C", "D", "E", "G", "A"], empty: "#292524", aether: [249, 115, 22] },    // Stone / Orange
+            { name: "Overcast", scale: ["D", "F", "G", "A", "C"], empty: "#1e1b4b", aether: [168, 85, 247] },    // Deep Purple / Violet
+            { name: "Sunlight", scale: ["E", "F#", "G#", "B", "C#"], empty: "#14532d", aether: [132, 204, 22] }, // Forest / Lime
+            { name: "Riverbed", scale: ["F", "G", "G#", "C", "D#"], empty: "#083344", aether: [6, 182, 212] }    // Deep Cyan / Cyan
+        ];
+
+        const activeBiome = biomes[Math.floor(Math.random() * biomes.length)];
+        
+        const COLOR_EMPTY = activeBiome.empty;
+        const COLOR_AETHER = activeBiome.aether;
+        const scale = activeBiome.scale;
+
+        // Apply biome colors to UI
+        document.getElementById('biome-label').innerText = `Biome: ${activeBiome.name}`;
+        document.body.style.backgroundColor = COLOR_EMPTY;
+
+        const registers = { "Bass": 2, "Tenor": 3, "Alto": 4, "Soprano": 5 };
+        const timbres = ["Sine", "Square", "Sawtooth", "Percussive"];
+        const envelopes = ["Plucky", "Ambient"];
+        const melodies = ["Drone", "Stepping", "Jumping"];
+        const delayTimes = ["16n", "8n", "8t", "8n.", "4n"];
+
+        const timbreHues = {
+            "Sine": 200,      // Blue
+            "Square": 320,    // Pink
+            "Sawtooth": 45,   // Yellow
+            "Percussive": 100 // Green-ish
+        };
+
+        function addAetherSplash(centerX, centerY, radius, amount) {
+            for (let x = -radius; x <= radius; x++) {
+                for (let y = -radius; y <= radius; y++) {
+                    const targetX = centerX + x;
+                    const targetY = centerY + y;
+                    if (targetX >= 0 && targetX < GRID_SIZE && targetY >= 0 && targetY < GRID_SIZE) {
+                        const distance = Math.sqrt(x*x + y*y);
+                        if (distance <= radius) {
+                            const intensity = amount * (1 - (distance / radius));
+                            grid[targetX][targetY] = Math.min(MAX_AETHER, grid[targetX][targetY] + intensity);
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateWeather() {
+            weatherTimer--;
+            
+            if (weatherTimer <= 0) {
+                isRaining = !isRaining;
+                const weatherUI = document.getElementById('weather-status');
+                
+                if (isRaining) {
+                    // Rainstorms are intense but relatively brief (40 to 120 ticks)
+                    weatherTimer = 40 + Math.floor(Math.random() * 80); 
+                    if(weatherUI) {
+                        weatherUI.innerText = "Rainstorm";
+                        weatherUI.style.color = "var(--ui-accent)";
+                        weatherUI.style.borderColor = "var(--ui-accent)";
+                        weatherUI.style.boxShadow = "inset 0 0 10px var(--ui-glow), 0 0 10px var(--ui-glow)";
+                    }
+                } else {
+                    // Dry spells last significantly longer (150 to 450 ticks)
+                    weatherTimer = 150 + Math.floor(Math.random() * 300); 
+                    if(weatherUI) {
+                        weatherUI.innerText = "Clear Skies";
+                        weatherUI.style.color = "#64748b";
+                        weatherUI.style.borderColor = "var(--cell-wall)";
+                        weatherUI.style.boxShadow = "none";
+                    }
+                }
+            }
+
+            if (isRaining) {
+                // Drop 1-3 heavier splashes per tick during a storm
+                let drops = 1 + Math.floor(Math.random() * 3);
+                for(let i=0; i<drops; i++) {
+                    addAetherSplash(
+                        Math.floor(Math.random() * GRID_SIZE),
+                        Math.floor(Math.random() * GRID_SIZE),
+                        2, 25
+                    );
+                }
+            }
+        }
+
+        function initGrid() {
+            grid = new Array(GRID_SIZE).fill(0).map(() => new Array(GRID_SIZE).fill(0));
+            for(let i=0; i<8; i++) {
+                addAetherSplash(Math.floor(Math.random()*GRID_SIZE), Math.floor(Math.random()*GRID_SIZE), 8, 100);
+            }
+        }
+
+        function generateRandomAudioGenome() {
+            const rhythm = Array.from({length: 16}, () => Math.random() > 0.7 ? Number((Math.random() * 0.7 + 0.3).toFixed(2)) : 0);
+            if (!rhythm.some(p => p > 0)) rhythm[Math.floor(Math.random() * 16)] = 0.8;
+
+            const hasDelay = Math.random() > 0.5;
+            return {
+                timbre: timbres[Math.floor(Math.random() * timbres.length)],
+                register: Object.keys(registers)[Math.floor(Math.random() * 4)],
+                envelope: envelopes[Math.floor(Math.random() * envelopes.length)],
+                melody: melodies[Math.floor(Math.random() * melodies.length)],
+                rhythm: rhythm,
+                delayTime: delayTimes[Math.floor(Math.random() * delayTimes.length)],
+                delayFeedback: Number((Math.random() * 0.6 + 0.1).toFixed(2)),
+                delayMix: hasDelay ? Number((Math.random() * 0.4 + 0.1).toFixed(2)) : 0
+            };
+        }
+
+        function mixGenomes(g1, g2) {
+            const mutate = (val, range) => Math.random() < 0.10 ? val + (Math.random() * range * 2 - range) : val;
+            
+            let mixed = {
+                maxEnergy: Math.max(100, mutate((g1.maxEnergy + g2.maxEnergy) / 2, 50)),
+                metabolismRate: Math.max(0.01, mutate((g1.metabolismRate + g2.metabolismRate) / 2, 0.05)),
+                absorbRate: Math.max(0.1, mutate((g1.absorbRate + g2.absorbRate) / 2, 0.5)),
+                growCost: Math.max(5, mutate((g1.growCost + g2.growCost) / 2, 5)),
+                maxAge: Math.max(500, mutate((g1.maxAge + g2.maxAge) / 2, 300))
+            };
+
+            mixed.timbre = Math.random() < 0.5 ? g1.timbre : g2.timbre;
+            mixed.register = Math.random() < 0.5 ? g1.register : g2.register;
+            mixed.envelope = Math.random() < 0.5 ? g1.envelope : g2.envelope;
+            mixed.melody = Math.random() < 0.5 ? g1.melody : g2.melody;
+            
+            mixed.rhythm = [];
+            const splitPoint = Math.floor(Math.random() * 16);
+            for(let i=0; i<16; i++) {
+                if (Math.random() < 0.05) mixed.rhythm[i] = Math.random() > 0.5 ? Number((Math.random() * 0.7 + 0.3).toFixed(2)) : 0;
+                else mixed.rhythm[i] = i < splitPoint ? g1.rhythm[i] : g2.rhythm[i];
+            }
+
+            if(Math.random() < 0.1) { 
+                 mixed.delayTime = delayTimes[Math.floor(Math.random() * delayTimes.length)];
+                 mixed.delayMix = Number((Math.random() * 0.4 + 0.1).toFixed(2));
+            } else {
+                 mixed.delayTime = Math.random() < 0.5 ? g1.delayTime : g2.delayTime;
+                 mixed.delayFeedback = (g1.delayFeedback + g2.delayFeedback) / 2;
+                 mixed.delayMix = (g1.delayMix + g2.delayMix) / 2;
+            }
+
+            mixed.hue = timbreHues[mixed.timbre];
+            if (Math.random() < 0.2) mixed.hue += (Math.random() * 40 - 20); 
+            
+            return mixed;
+        }
+
+        class Spore {
+            constructor(x, y, targetX, targetY, genome) {
+                this.startX = x; this.startY = y;
+                this.targetX = targetX; this.targetY = targetY;
+                this.genome = genome;
+                this.progress = 0;
+            }
+            tick() {
+                this.progress += 0.02;
+                this.x = this.startX + (this.targetX - this.startX) * this.progress;
+                let baseY = this.startY + (this.targetY - this.startY) * this.progress;
+                this.y = baseY - Math.sin(this.progress * Math.PI) * 4;
+            }
+        }
+
+        class StaticWeed {
+            constructor(x, y) {
+                this.cells = [{x, y}];
+                this.age = 0;
+                this.isDead = false;
+                
+                this.noiseFilter = new Tone.AutoFilter({
+                    frequency: 0.1, baseFrequency: 100, octaves: 5
+                });
+
+                // Connect to master reverb only if it has been initialized
+                if (masterReverb) this.noiseFilter.connect(masterReverb);
+                this.noiseFilter.start();
+
+                this.synth = new Tone.NoiseSynth({
+                    noise: { type: 'pink' },
+                    envelope: { attack: 2, decay: 0, sustain: 1, release: 2 }
+                }).connect(this.noiseFilter);
+                
+                this.synth.volume.value = -60; 
+                this.isPlaying = false;
+            }
+            
+            playStep(time) {
+                if (this.isDead) return;
+                
+                // Volume scales with size, but stays relatively low so it's a drone, not a stab
+                this.synth.volume.rampTo(-35 + Math.min(20, this.cells.length), 0.5);
+                
+                if (!this.isPlaying) {
+                    this.synth.triggerAttack(time);
+                    this.isPlaying = true;
+                }
+            }
+            
+            tick() {
+                if (this.isDead) return;
+                this.age++;
+                
+                for (let cell of this.cells) {
+                    if (grid[cell.x][cell.y] > 0) {
+                        grid[cell.x][cell.y] = Math.max(0, grid[cell.x][cell.y] - 2);
+                    }
+                }
+                
+                if (this.age % 30 === 0 && this.cells.length < 25) {
+                    let potential = [];
+                    for (let cell of this.cells) {
+                        const neighbors = [{x: cell.x+1, y: cell.y}, {x: cell.x-1, y: cell.y}, {x: cell.x, y: cell.y+1}, {x: cell.x, y: cell.y-1}];
+                        for (let n of neighbors) {
+                            if (n.x >= 0 && n.x < GRID_SIZE && n.y >= 0 && n.y < GRID_SIZE) {
+                                let occupiedByStatic = this.cells.some(c => c.x === n.x && c.y === n.y) || 
+                                                       statics.some(s => s !== this && s.cells.some(c => c.x === n.x && c.y === n.y));
+                                let occupiedByPlant = organisms.some(o => !o.isDead && o.tendrils.some(t => t.x === n.x && t.y === n.y));
+                                
+                                if (!occupiedByStatic && !occupiedByPlant) potential.push(n);
+                            }
+                        }
+                    }
+                    if (potential.length > 0) {
+                        let pick = potential[Math.floor(Math.random() * potential.length)];
+                        this.cells.push(pick);
+                    }
+                }
+            }
+            
+            die() {
+                this.isDead = true;
+                this.synth.triggerRelease();
+                setTimeout(() => {
+                    this.synth.dispose();
+                    this.noiseFilter.dispose();
+                }, 2000); // Give release time to ring out
+            }
+        }
+
+        class Organism {
+            constructor(x, y, inheritedGenome = null) {
+                this.id = Math.random().toString(36).substr(2, 9);
+                this.originX = x; this.originY = y;
+                
+                let baseGenome = {
+                    maxEnergy: 300, metabolismRate: 0.1, absorbRate: 1.0, growCost: 20, maxAge: 1500 + Math.random() * 500
+                };
+                
+                if (inheritedGenome) {
+                    this.genome = inheritedGenome;
+                } else {
+                    const audioGenes = generateRandomAudioGenome();
+                    this.genome = { ...baseGenome, ...audioGenes, hue: timbreHues[audioGenes.timbre] };
+                }
+
+                this.energy = 80;
+                this.maxEnergy = this.genome.maxEnergy;
+                this.metabolismRate = this.genome.metabolismRate;
+                this.absorbRate = this.genome.absorbRate;
+                this.growCost = this.genome.growCost;
+                this.age = 0;
+                this.maxAge = this.genome.maxAge;
+                this.color = `hsl(${this.genome.hue}, 80%, 60%)`;
+                
+                this.matingCooldown = 0;
+                this.MATURITY_AGE = 300;
+                
+                // Track parent coordinates (px, py) for drawing smooth bezier tendrils
+                this.tendrils = [{x: x, y: y, px: x, py: y}]; 
+                this.isDead = false;
+                this.isFullyDecayed = false;
+                
+                // Visual Animators
+                this.animOffset = Math.random() * 1000; // Random start phase for swaying
+                this.visualPulse = 0; // Smooths out the 60fps singing flash
+                this.melodyIndex = 0;
+                this.isSinging = false; 
+                this.setupAudio();
+            }
+
+            setupAudio() {
+                let oscType = this.genome.timbre.toLowerCase();
+                if (this.genome.timbre === "Percussive") {
+                    this.synth = new Tone.MembraneSynth(); 
+                } else {
+                    this.synth = new Tone.Synth({ oscillator: { type: oscType }}); 
+                }
+
+                if (this.genome.timbre !== "Percussive") {
+                    if (this.genome.envelope === "Plucky") {
+                        this.synth.envelope.attack = 0.01; this.synth.envelope.decay = 0.1;
+                        this.synth.envelope.sustain = 0.1; this.synth.envelope.release = 0.5;
+                    } else if (this.genome.envelope === "Ambient") {
+                        this.synth.envelope.attack = 0.5; this.synth.envelope.decay = 0.2;
+                        this.synth.envelope.sustain = 0.8; this.synth.envelope.release = 2;
+                    }
+                }
+
+                this.delay = new Tone.FeedbackDelay({
+                    delayTime: this.genome.delayTime,
+                    feedback: this.genome.delayFeedback,
+                    wet: this.genome.delayMix,
+                    maxDelay: 4 // CRITICAL FIX: prevents InvalidAccessError at slow tempos
+                });
+
+                // Route Sopranos to the Ethereal reverb so they don't pierce the mix
+                if (masterReverb && etherealReverb) {
+                    if (this.genome.register === "Soprano" || (this.genome.register === "Alto" && this.genome.timbre === "Sawtooth")) {
+                        this.synth.chain(this.delay, etherealReverb);
+                    } else {
+                        this.synth.chain(this.delay, masterReverb);
+                    }
+                } else {
+                    this.synth.connect(this.delay); // Fallback if somehow initialized early
+                }
+            }
+
+            playStep(stepIndex, time) {
+                if (this.isDead) return;
+                
+                this.isSinging = false;
+                const energyRatio = Math.max(0, this.energy / this.maxEnergy);
+                
+                // Base volume scaling
+                let targetVol = -48 + (36 * energyRatio);
+                
+                // Audio Mix adjustment: Pull Soprano and Ambient notes down further
+                if (this.genome.register === "Soprano") targetVol -= 12;
+                if (this.genome.envelope === "Ambient") targetVol -= 6;
+                if (this.genome.register === "Alto" && this.genome.timbre === "Sawtooth") targetVol -= 10;
+                
+                this.synth.volume.value = targetVol;
+
+                const baseProb = this.genome.rhythm[stepIndex];
+                const adjustedProb = baseProb * energyRatio;
+
+                if (adjustedProb > 0 && Math.random() <= adjustedProb) {
+                    const octave = registers[this.genome.register];
+                    let noteName;
+                    if (this.genome.melody === "Drone") noteName = scale[0];
+                    else if (this.genome.melody === "Stepping") {
+                        noteName = scale[this.melodyIndex % scale.length];
+                        this.melodyIndex++;
+                    }
+                    else noteName = scale[Math.floor(Math.random() * scale.length)];
+
+                    const duration = this.genome.envelope === "Plucky" ? "16n" : "4n";
+                    this.synth.triggerAttackRelease(noteName + octave, duration, time);
+                    
+                    Tone.Draw.schedule(() => {
+                        this.isSinging = true;
+                        this.visualPulse = 1.0; // Trigger the smooth visual pulse
+                    }, time);
+                }
+            }
+
+            tick() {
+                if (this.isDead) {
+                    if (currentStep % 2 === 0 && Math.random() < 0.3) { 
+                        if (this.tendrils.length > 0) {
+                            let witheredCell = this.tendrils.pop();
+                            grid[witheredCell.x][witheredCell.y] = Math.min(MAX_AETHER, grid[witheredCell.x][witheredCell.y] + 5);
+                        } else {
+                            this.isFullyDecayed = true;
+                        }
+                    }
+                    return;
+                }
+
+                this.age++;
+                const upkeep = this.metabolismRate + (this.tendrils.length * 0.05);
+                this.energy -= upkeep;
+
+                for (let cell of this.tendrils) {
+                    if (grid[cell.x][cell.y] > 0) {
+                        let amount = Math.min(grid[cell.x][cell.y], this.absorbRate);
+                        grid[cell.x][cell.y] -= amount;
+                        this.energy += amount;
+                    }
+                }
+                
+                if (this.energy > this.maxEnergy) this.energy = this.maxEnergy;
+                if (this.age % 10 === 0 && this.energy > (this.growCost * 2)) this.attemptGrowth();
+                
+                if (this.matingCooldown > 0) this.matingCooldown--;
+                if (this.age % 20 === 0 && this.matingCooldown === 0 && this.age >= this.MATURITY_AGE && this.energy > this.maxEnergy * 0.7) {
+                    this.attemptMating();
+                }
+
+                if (this.energy <= 0 || this.age >= this.maxAge) this.die();
+            }
+
+            attemptGrowth() {
+                let potentialGrowth = [];
+                let checked = new Set();
+                let owned = new Set(this.tendrils.map(t => `${t.x},${t.y}`));
+
+                for (let cell of this.tendrils) {
+                    const neighbors = [{x: cell.x+1, y: cell.y}, {x: cell.x-1, y: cell.y}, {x: cell.x, y: cell.y+1}, {x: cell.x, y: cell.y-1}];
+                    for (let n of neighbors) {
+                        const key = `${n.x},${n.y}`;
+                        if (n.x >= 0 && n.x < GRID_SIZE && n.y >= 0 && n.y < GRID_SIZE && !owned.has(key) && !checked.has(key)) {
+                            let occupied = organisms.some(o => !o.isDead && o.tendrils.some(t => t.x === n.x && t.y === n.y));
+                            let blockedByStatic = statics.some(s => !s.isDead && s.cells.some(c => c.x === n.x && c.y === n.y));
+                            
+                            // Capture the parent X and Y so we can draw the connecting bezier curve
+                            if (!occupied && !blockedByStatic) potentialGrowth.push({x: n.x, y: n.y, aether: grid[n.x][n.y], parentX: cell.x, parentY: cell.y});
+                            checked.add(key);
+                        }
+                    }
+                }
+                potentialGrowth.sort((a, b) => b.aether - a.aether);
+                if (potentialGrowth.length > 0 && potentialGrowth[0].aether > 0) {
+                    this.energy -= this.growCost;
+                    this.tendrils.push({x: potentialGrowth[0].x, y: potentialGrowth[0].y, px: potentialGrowth[0].parentX, py: potentialGrowth[0].parentY});
+                }
+            }
+
+            attemptMating() {
+                for (let cell of this.tendrils) {
+                    const neighbors = [{x: cell.x+1, y: cell.y}, {x: cell.x-1, y: cell.y}, {x: cell.x, y: cell.y+1}, {x: cell.x, y: cell.y-1}];
+                    for (let n of neighbors) {
+                        let partner = organisms.find(o => 
+                            o !== this && !o.isDead && o.age >= this.MATURITY_AGE && 
+                            o.energy > (o.maxEnergy * 0.7) && o.matingCooldown === 0 &&
+                            o.tendrils.some(t => t.x === n.x && t.y === n.y)
+                        );
+                        if (partner) {
+                            this.breedWith(partner);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            breedWith(partner) {
+                this.energy -= this.maxEnergy * 0.4; partner.energy -= partner.maxEnergy * 0.4;
+                this.matingCooldown = 800; partner.matingCooldown = 800;
+                
+                const childGenome = mixGenomes(this.genome, partner.genome);
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 5 + Math.random() * 10;
+                let tx = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(this.originX + Math.cos(angle) * distance)));
+                let ty = Math.max(0, Math.min(GRID_SIZE - 1, Math.floor(this.originY + Math.sin(angle) * distance)));
+                spores.push(new Spore(this.originX, this.originY, tx, ty, childGenome));
+            }
+
+            die() {
+                this.isDead = true;
+                this.synth.dispose();
+                this.delay.dispose();
+                addAetherSplash(this.originX, this.originY, 4, Math.max(20, this.energy));
+                if(selectedOrganism === this) updateUI();
+            }
+        }
+
+        function drawProceduralPlant(ctx, org, centerX, centerY, scaleMult, time) {
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // Map Envelope to Animation (Swaying/Breathing)
+            let swaySpeed = org.genome.envelope === "Ambient" ? 0.002 : 0.01;
+            let swayAmount = org.genome.envelope === "Ambient" ? 0.1 : 0.05;
+            ctx.rotate(Math.sin(time * swaySpeed + org.animOffset) * swayAmount);
+
+            // Smooth the singing pulse
+            org.visualPulse = org.visualPulse * 0.8 + (org.isSinging ? 0.4 : 0);
+            let activeScale = 1 + org.visualPulse;
+            ctx.scale(activeScale * scaleMult, activeScale * scaleMult);
+
+            ctx.fillStyle = org.isDead ? `hsl(${org.genome.hue}, 15%, 20%)` : org.color;
+            ctx.strokeStyle = org.isDead ? `hsl(${org.genome.hue}, 15%, 15%)` : '#ffffff';
+            ctx.lineWidth = 1.5;
+
+            // Map Timbre to Physical Shape
+            ctx.beginPath();
+            if (org.genome.timbre === "Sine") {
+                // Smooth & Bulbous (Grapes/Mushrooms)
+                ctx.arc(0, 0, CELL_SIZE * 0.7, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.arc(-CELL_SIZE*0.3, -CELL_SIZE*0.3, CELL_SIZE * 0.4, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.arc(CELL_SIZE*0.3, -CELL_SIZE*0.2, CELL_SIZE * 0.35, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+            } 
+            else if (org.genome.timbre === "Square") {
+                // Crystalline & Geometric
+                for(let i=0; i<3; i++) {
+                    ctx.rotate(Math.PI / 4 + (i * 0.2));
+                    ctx.fillRect(-CELL_SIZE*0.5, -CELL_SIZE*0.5, CELL_SIZE, CELL_SIZE);
+                    ctx.strokeRect(-CELL_SIZE*0.5, -CELL_SIZE*0.5, CELL_SIZE, CELL_SIZE);
+                }
+            } 
+            else if (org.genome.timbre === "Sawtooth") {
+                // Spiky/Jagged (Star shape)
+                let spikes = 7;
+                for(let i=0; i<spikes*2; i++) {
+                    let r = i % 2 === 0 ? CELL_SIZE * 0.9 : CELL_SIZE * 0.3;
+                    let angle = (i * Math.PI) / spikes;
+                    if(i===0) ctx.moveTo(Math.cos(angle)*r, Math.sin(angle)*r);
+                    else ctx.lineTo(Math.cos(angle)*r, Math.sin(angle)*r);
+                }
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+            } 
+            else if (org.genome.timbre === "Percussive") {
+                // Segmented / Pod-like
+                ctx.ellipse(0, 0, CELL_SIZE * 0.8, CELL_SIZE * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(0, 0, CELL_SIZE * 0.5, CELL_SIZE * 0.2, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            // Draw selected highlight ring
+            if (selectedOrganism === org) {
+                ctx.beginPath();
+                ctx.arc(0, 0, CELL_SIZE * 1.5, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(255, 255, 255, ${Math.sin(time * 0.005) * 0.5 + 0.5})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        function draw() {
+            globalTime += 16.6; // Approx ms per frame at 60fps
+            
+            ctx.fillStyle = COLOR_EMPTY;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Soil Layer (Mosaic style)
+            for (let x = 0; x < GRID_SIZE; x++) {
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    const aether = grid[x][y];
+                    if (aether > 0) {
+                        const alpha = aether / MAX_AETHER;
+                        ctx.fillStyle = `rgba(${COLOR_AETHER[0]}, ${COLOR_AETHER[1]}, ${COLOR_AETHER[2]}, ${alpha * 0.6})`;
+                        // Draw as softer, disconnected mosaic tiles
+                        ctx.fillRect(x * CELL_SIZE + 1, y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+                    }
+                }
+            }
+            
+            // The Static (Glitchy Vectors)
+            statics.forEach(s => {
+                s.cells.forEach(c => {
+                    ctx.save();
+                    ctx.translate(c.x * CELL_SIZE + CELL_SIZE/2, c.y * CELL_SIZE + CELL_SIZE/2);
+                    // Chaotic jitter
+                    ctx.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
+                    
+                    ctx.beginPath();
+                    for(let i=0; i<3; i++) {
+                        let tx = (Math.random() - 0.5) * CELL_SIZE * 1.5;
+                        let ty = (Math.random() - 0.5) * CELL_SIZE * 1.5;
+                        if(i===0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
+                    }
+                    ctx.closePath();
+                    ctx.fillStyle = `hsl(0, 0%, ${Math.random() > 0.5 ? 20 : 80}%)`;
+                    ctx.fill();
+                    ctx.restore();
+                });
+            });
+
+            // Organisms (Tendrils & Cores)
+            organisms.forEach(org => {
+                // Map Register to physical proportions
+                let thicknessMultiplier = 1;
+                let coreScale = 1;
+                if (org.genome.register === "Bass") { thicknessMultiplier = 1.8; coreScale = 1.3; }
+                else if (org.genome.register === "Soprano") { thicknessMultiplier = 0.5; coreScale = 0.7; }
+                else if (org.genome.register === "Tenor") { thicknessMultiplier = 1.2; }
+
+                ctx.strokeStyle = org.isDead ? `hsl(${org.genome.hue}, 15%, 25%)` : org.color;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                // Draw Organic Tendrils (Bezier Curves)
+                ctx.beginPath();
+                org.tendrils.forEach(t => {
+                    ctx.moveTo(t.px * CELL_SIZE + CELL_SIZE/2, t.py * CELL_SIZE + CELL_SIZE/2);
+                    // Add slight curve by pulling control point slightly off center
+                    let cpx = ((t.px + t.x) / 2) * CELL_SIZE + CELL_SIZE/2 + (Math.sin(t.x * 10) * 5);
+                    let cpy = ((t.py + t.y) / 2) * CELL_SIZE + CELL_SIZE/2 + (Math.cos(t.y * 10) * 5);
+                    ctx.quadraticCurveTo(cpx, cpy, t.x * CELL_SIZE + CELL_SIZE/2, t.y * CELL_SIZE + CELL_SIZE/2);
+                });
+                
+                // Pulse tendrils based on energy
+                let energyRatio = org.energy / org.maxEnergy;
+                ctx.lineWidth = (CELL_SIZE * 0.2 * thicknessMultiplier) * (org.isDead ? 0.5 : (energyRatio * 0.5 + 0.5));
+                ctx.stroke();
+
+                // Draw Core Geometry
+                drawProceduralPlant(ctx, org, org.originX * CELL_SIZE + CELL_SIZE/2, org.originY * CELL_SIZE + CELL_SIZE/2, coreScale, globalTime);
+            });
+            
+            // Spores Layer (Glowing orbs)
+            spores.forEach(spore => {
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(spore.x * CELL_SIZE + CELL_SIZE/2, spore.y * CELL_SIZE + CELL_SIZE/2, CELL_SIZE/3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = `hsl(${spore.genome.hue}, 100%, 70%)`;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            // Loop the render frame at 60fps
+            requestAnimationFrame(draw);
+        }
+
+        function performAudioStep(time) {
+            const stepToDraw = currentStep;
+            Tone.Draw.schedule(() => {
+                document.getElementById('step-counter').innerText = stepToDraw + 1;
+            }, time);
+            
+            if (Math.random() < 0.02 && statics.length < 4) {
+                let sx = Math.floor(Math.random() * GRID_SIZE);
+                let sy = Math.floor(Math.random() * GRID_SIZE);
+                if (grid[sx][sy] === 0) { 
+                    let occupied = organisms.some(o => !o.isDead && o.tendrils.some(t => t.x === sx && t.y === sy)) || 
+                                   statics.some(s => s.cells.some(c => c.x === sx && c.y === sy));
+                    if (!occupied) {
+                        statics.push(new StaticWeed(sx, sy));
+                    }
+                }
+            }
+            
+            organisms.forEach(org => org.playStep(currentStep, time));
+            statics.forEach(s => s.playStep(time));
+            
+            currentStep = (currentStep + 1) % 16;
+            
+            updateWeather();
+            organisms.forEach(org => org.tick());
+            statics.forEach(s => s.tick());
+            spores.forEach(spore => spore.tick());
+            
+            spores = spores.filter(spore => {
+                if (spore.progress >= 1.0) {
+                    const occupiedByPlant = organisms.some(o => !o.isDead && o.tendrils.some(t => t.x === spore.targetX && t.y === spore.targetY));
+                    const occupiedByStatic = statics.some(s => s.cells.some(c => c.x === spore.targetX && c.y === spore.targetY));
+                    if(!occupiedByPlant && !occupiedByStatic) organisms.push(new Organism(spore.targetX, spore.targetY, spore.genome));
+                    return false; 
+                }
+                return true; 
+            });
+
+            organisms = organisms.filter(org => !org.isFullyDecayed);
+            statics = statics.filter(s => !s.isDead);
+            
+            Tone.Draw.schedule(() => {
+                updateUI();
+            }, time);
+        }
+
+        canvas.addEventListener('mousedown', async (e) => {
+            await initAudio(); // Safely unlock Web Audio on first interaction
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor(((e.clientX - rect.left) * (canvas.width / rect.width)) / CELL_SIZE);
+            const y = Math.floor(((e.clientY - rect.top) * (canvas.height / rect.height)) / CELL_SIZE);
+            if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+
+            const clickedOrg = organisms.find(o => o.tendrils.some(t => t.x === x && t.y === y));
+            const clickedStatic = statics.find(s => s.cells.some(c => c.x === x && c.y === y));
+
+            if (activeTool === 'inspect') {
+                selectedOrganism = clickedOrg || null;
+            }
+            else if (activeTool === 'seed' && !clickedOrg && !clickedStatic) {
+                organisms.push(new Organism(x, y));
+            } 
+            else if (activeTool === 'water') {
+                addAetherSplash(x, y, 5, 80);
+            }
+            else if (activeTool === 'uproot') {
+                if (clickedOrg) {
+                    clickedOrg.die();
+                    if (selectedOrganism === clickedOrg) selectedOrganism = null;
+                }
+                if (clickedStatic) clickedStatic.die();
+            }
+            
+            updateUI();
+        });
+
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Reset all buttons to default dark state
+                document.querySelectorAll('.tool-btn').forEach(b => {
+                    b.classList.remove('bg-white/10');
+                    b.style.borderColor = 'var(--cell-wall)';
+                    b.style.boxShadow = 'none';
+                    b.style.color = '#cbd5e1'; 
+                });
+                
+                // Light up active button with static UI theme
+                const target = e.currentTarget;
+                target.classList.add('bg-white/10');
+                target.style.borderColor = 'var(--ui-accent)';
+                target.style.boxShadow = 'inset 0 0 10px var(--ui-glow)';
+                target.style.color = '#fff';
+                
+                activeTool = target.id.replace('tool-', '');
+            });
+        });
+
+        // Set initial tool styling
+        const initialTool = document.getElementById('tool-seed');
+        initialTool.classList.add('bg-white/10');
+        initialTool.style.borderColor = 'var(--ui-accent)';
+        initialTool.style.boxShadow = 'inset 0 0 10px var(--ui-glow)';
+        initialTool.style.color = '#fff';
+
+        document.getElementById('btn-play').addEventListener('click', async () => {
+            await initAudio(); // Safely unlock Web Audio on first interaction
+            Tone.Transport.bpm.value = Number(document.getElementById('bpm-slider').value);
+            
+            organisms.forEach(org => {
+                if (org.delay) org.delay.delayTime.value = org.genome.delayTime;
+            });
+
+            sequencerEventId = Tone.Transport.scheduleRepeat(performAudioStep, "16n");
+            Tone.Transport.start();
+            
+            isRunning = true;
+            document.getElementById('btn-play').classList.add('hidden');
+            document.getElementById('btn-pause').classList.remove('hidden');
+        });
+
+        document.getElementById('btn-pause').addEventListener('click', () => {
+            Tone.Transport.stop();
+            Tone.Transport.clear(sequencerEventId);
+            isRunning = false;
+            document.getElementById('btn-pause').classList.add('hidden');
+            document.getElementById('btn-play').classList.remove('hidden');
+        });
+
+        document.getElementById('bpm-slider').addEventListener('input', (e) => {
+            const newBpm = Number(e.target.value);
+            Tone.Transport.bpm.value = newBpm;
+            document.getElementById('bpm-display').innerText = newBpm;
+            
+            organisms.forEach(org => {
+                if (org.delay && !org.isDead) {
+                    org.delay.delayTime.value = org.genome.delayTime;
+                }
+            });
+        });
+
+        function updateUI() {
+            const statsPanel = document.getElementById('selected-stats');
+            const noSelection = document.getElementById('no-selection');
+
+            if (selectedOrganism && !selectedOrganism.isDead) {
+                statsPanel.classList.remove('hidden');
+                noSelection.classList.add('hidden');
+                
+                const percentEnergy = ((selectedOrganism.energy / selectedOrganism.maxEnergy) * 100).toFixed(0);
+                
+                let rhythmHTML = '<div class="flex gap-1 mt-3">';
+                for(let i=0; i<16; i++) {
+                    const prob = selectedOrganism.genome.rhythm[i];
+                    const active = prob > 0;
+                    // Note: active rhythm steps still use the UI accent color so the interface remains unified
+                    rhythmHTML += `<div class="h-3 flex-1 rounded-sm ${active ? 'bg-[var(--ui-accent)] shadow-[0_0_5px_var(--ui-glow)]' : 'bg-black/50 border border-[var(--cell-wall)]'}" style="opacity: ${active ? prob : 0.4}"></div>`;
+                }
+                rhythmHTML += '</div>';
+
+                statsPanel.innerHTML = `
+                    <div class="mb-4 bg-black/20 p-4 organic-subpanel">
+                        <span class="block text-[#f8fafc] font-bold text-lg mb-3 tracking-wide flex justify-between items-center italic">
+                            <span>Specimen: <span class="mono text-[var(--ui-accent)] text-sm ml-1 not-italic">${selectedOrganism.id}</span></span>
+                            <div class="w-4 h-4 rounded-full shadow-[0_0_10px_currentColor]" style="background-color: ${selectedOrganism.color}; color: ${selectedOrganism.color}; border: 1px solid rgba(255,255,255,0.3);"></div>
+                        </span>
+                        
+                        <div class="flex justify-between mb-1 text-[11px] uppercase tracking-widest text-[#94a3b8]">
+                            <span>Aether Reservoir</span>
+                            <span class="mono">${Math.round(selectedOrganism.energy)} / ${Math.round(selectedOrganism.maxEnergy)}</span>
+                        </div>
+                        <div class="w-full bg-black/60 h-2.5 rounded-full overflow-hidden border border-[var(--cell-wall)]">
+                            <div class="h-full transition-all relative" style="width: ${percentEnergy}%; background-color: ${selectedOrganism.color};">
+                                <div class="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-black/20 p-4 organic-subpanel">
+                        <span class="text-[11px] text-[var(--ui-accent)] uppercase tracking-widest font-bold">Transcription</span>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-sm mt-3 font-semibold text-[#cbd5e1]">
+                            <div>Timb: <span class="text-white ml-1 font-normal">${selectedOrganism.genome.timbre}</span></div>
+                            <div>Reg: <span class="text-white ml-1 font-normal">${selectedOrganism.genome.register}</span></div>
+                            <div>Env: <span class="text-white ml-1 font-normal">${selectedOrganism.genome.envelope}</span></div>
+                            <div>Mel: <span class="text-white ml-1 font-normal">${selectedOrganism.genome.melody}</span></div>
+                        </div>
+                        ${rhythmHTML}
+                    </div>
+
+                    <div class="flex justify-between items-center text-sm bg-black/20 px-4 py-3 organic-subpanel font-semibold">
+                        <div class="text-[#cbd5e1]">Cells: <span class="text-white font-normal ml-1">${selectedOrganism.tendrils.length}</span></div>
+                        <div class="text-[#cbd5e1]">Phase: <span class="text-[var(--ui-accent)] font-bold tracking-wide uppercase text-[11px] ml-1">${selectedOrganism.age < selectedOrganism.MATURITY_AGE ? 'Seedling' : (selectedOrganism.matingCooldown > 0 ? 'Dormant' : 'Mature')}</span></div>
+                    </div>
+                `;
+            } else {
+                statsPanel.classList.add('hidden');
+                noSelection.classList.remove('hidden');
+            }
+        }
+
+        initGrid();
+        draw(); // Kick off the infinite 60fps loop
+    </script>
+</body>
+</html>
