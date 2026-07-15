@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <!-- MOBILE OPTIMIZED VIEWPORT: prevent zooming, proper scaling -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimum-scale=0.8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes">
     <title>Synbiome Garden</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -134,7 +134,6 @@
         
         #sim-canvas {
             cursor: crosshair;
-            touch-action: none; /* Prevent browser gestures when touching canvas */
         }
 
         /* --- ORGANIC UI CLASSES --- */
@@ -213,10 +212,10 @@
         <p id="biome-label" class="text-[#cbd5e1] text-lg tracking-wider opacity-90">Biome: Loading...</p>
     </header>
 
-    <div class="flex flex-col lg:flex-row gap-6 w-full max-w-screen-xl h-[calc(100vh-8rem)] mx-auto">
+    <div class="flex flex-col lg:flex-row gap-6 w-full h-[calc(100vh-8rem)]" style="max-width: 100%;">
 
         <!-- Canvas Container (Cellular Panel) -->
-        <div class="flex-grow lg:mr-80 md:mr-96 organic-panel p-6 flex flex-col relative overflow-hidden">
+        <div class="flex-grow organic-panel p-6 flex flex-col relative overflow-hidden">
 
             <!-- Sleek Top Control Bar -->
             <div class="flex justify-between items-center mb-5 bg-black/20 organic-subpanel p-3">
@@ -237,16 +236,16 @@
             </div>
 
             <!-- Canvas Window -->
-            <div class="relative flex-grow flex items-center justify-center bg-black/40 organic-subpanel overflow-hidden shadow-inner" id="canvas-container">
-                <canvas id="sim-canvas" width="600" height="600" class="max-w-full max-h-full object-contain touch-manipulation"></canvas>
+            <div class="relative flex-grow flex items-center justify-center bg-black/40 organic-subpanel overflow-hidden shadow-inner" id="canvas-container" style="width: 100%;">
+                <canvas id="sim-canvas" width="600" height="600"></canvas>
             </div>
 
             <!-- Canvas sizing happens in init() -->
         </div>
 
         <!-- Interventions Panel (Cellular Panel) -->
-        <div class="w-full lg:w-80 organic-panel p-5 md:p-4 flex flex-col gap-4 min-h-[44px] transition-all duration-300">
-            <h2 class="text-xl italic font-bold mb-3 text-[#cbd5e1] border-b border-[var(--cell-wall)] pb-3 flex-shrink-0">Interventions</h2>
+        <div class="w-full lg:w-80 organic-panel p-5 md:p-4 flex flex-col gap-4" style="flex-shrink: 0; width: auto;">
+            <h2 class="text-xl italic font-bold mb-3 text-[#cbd5e1] border-b border-[var(--cell-wall)] pb-3">Interventions</h2>
 
             <!-- Tool Buttons -->
             <div class="flex flex-col gap-3 mb-6">
@@ -300,16 +299,17 @@
             canvas.style.width = `${displayWidth}px`;
             canvas.style.height = `${displayHeight}px`;
 
-            // Keep internal resolution high for clarity, but scale via CSS
-            // This prevents blurriness while still being responsive
+            // Recalculate CELL_SIZE after resize to handle different screen sizes
+            CELL_SIZE = canvas.width / GRID_SIZE;
         }
 
         // Run resize on load and window resize events
         window.addEventListener('load', resizeCanvas);
         window.addEventListener('resize', resizeCanvas);
+        requestAnimationFrame(resizeCanvas); // Force initial resize after canvas renders
 
         const GRID_SIZE = 40;
-        const CELL_SIZE = canvas.width / GRID_SIZE;
+        let CELL_SIZE = canvas.width / GRID_SIZE;
         const MAX_AETHER = 100;
 
         let grid = [];
@@ -888,6 +888,10 @@
             ctx.fillStyle = COLOR_EMPTY;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // Recalculate CELL_SIZE based on current rendered dimensions (handles resize)
+            const CELL_SIZE = canvas.width / GRID_SIZE;
+
+
             // Soil Layer (Mosaic style)
             for (let x = 0; x < GRID_SIZE; x++) {
                 for (let y = 0; y < GRID_SIZE; y++) {
@@ -1016,43 +1020,13 @@
             }, time);
         }
 
-        // MOBILE TOUCH SUPPORT: Better mobile responsiveness with unified pointer events
+        // Unified canvas interaction handler for all devices (mouse, touch, pen)
         canvas.addEventListener('pointerdown', async (e) => {
-            e.preventDefault(); // Prevent scrolling during canvas interaction
-            await initAudio(); // Safely unlock Web Audio on first interaction
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = Math.floor(((e.touches[0].clientX - rect.left) * scaleX) / CELL_SIZE);
-            const y = Math.floor(((e.touches[0].clientY - rect.top) * scaleY) / CELL_SIZE);
-            handleCanvasInteraction(x, y);
-        }, { passive: false });
-
-        // Also support pointer events (works on both mouse and touch devices)
-        canvas.addEventListener('pointerdown', async (e) => {
-            e.preventDefault();
-            await initAudio();
-            
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = Math.floor(((e.clientX - rect.left) * scaleX) / CELL_SIZE);
-            const y = Math.floor(((e.clientY - rect.top) * scaleY) / CELL_SIZE);
-            handleCanvasInteraction(x, y);
-        }, { passive: false });
-
-        // Fallback to mouse events for desktop
-        canvas.addEventListener('mousedown', async (e) => {
             await initAudio();
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const x = Math.floor(((e.clientX - rect.left) * scaleX) / CELL_SIZE);
-            const y = Math.floor(((e.clientY - rect.top) * scaleY) / CELL_SIZE);
-            handleCanvasInteraction(x, y);
-        });
+            const x = Math.floor(((e.clientX - rect.left) * (canvas.width / rect.width)) / CELL_SIZE);
+            const y = Math.floor(((e.clientY - rect.top) * (canvas.height / rect.height)) / CELL_SIZE);
 
-        function handleCanvasInteraction(x, y) {
             if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
 
             const clickedOrg = organisms.find(o => o.tendrils.some(t => t.x === x && t.y === y));
@@ -1063,7 +1037,7 @@
             }
             else if (activeTool === 'seed' && !clickedOrg && !clickedStatic) {
                 organisms.push(new Organism(x, y));
-            } 
+            }
             else if (activeTool === 'water') {
                 addAetherSplash(x, y, 5, 80);
             }
@@ -1074,9 +1048,9 @@
                 }
                 if (clickedStatic) clickedStatic.die();
             }
-            
+
             updateUI();
-        }
+        });
 
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
