@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- MOBILE OPTIMIZED VIEWPORT: prevent zooming, proper scaling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimum-scale=0.8">
     <title>Synbiome Garden</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -27,6 +28,109 @@
             background-image: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.03), transparent 70%);
             font-size: 1.1rem;
         }
+
+        /* --- MOBILE OPTIMIZATIONS START --- */
+
+        /* Prevent horizontal overflow on all devices */
+        html, body {
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden;
+            box-sizing: border-box;
+        }
+
+        /* Finger-friendly tap targets (min 48x48px for accessibility) */
+        button {
+            min-height: 52px;
+            min-width: 96px;
+            padding: 12px 16px;
+            touch-action: manipulation; /* Improves touch response on mobile */
+        }
+
+        .organic-btn {
+            min-height: 50px;
+            touch-action: manipulation;
+        }
+
+        /* Make tool buttons stack vertically on small screens for easier thumb reach */
+        @media (max-width: 640px) {
+            body > div {
+                flex-direction: column !important;
+                max-width: 100vw !important;
+            }
+
+            .w-full md\:w-80 {
+                width: 100% !important;
+            }
+
+            h1 {
+                font-size: 2.5rem !important; /* Smaller title for mobile */
+            }
+
+            p {
+                font-size: 1rem !important;
+            }
+
+            /* Stack controls vertically on small screens */
+            .flex.justify-between.items-center.mb-5.bg-black\/20.organic-subpanel.p-3 {
+                flex-direction: column !important;
+                gap: 8px !important;
+                align-items: stretch !important;
+            }
+
+            /* Smaller canvas on mobile but still responsive */
+            #sim-canvas {
+                max-width: calc(100vw - 32px) !important; /* Leave room for UI */
+                max-height: calc(75vh - 48px) !important;
+            }
+
+            /* Make slider easier to tap on mobile */
+            input[type="range"] {
+                width: 100% !important; /* Full width slider on mobile */
+            }
+
+            /* Smaller text for mobile */
+            .text-lg, .text-xl {
+                font-size: 1.25rem !important; /* Tailwind lg = 1.25rem */
+            }
+
+            .text-6xl {
+                font-size: 3rem !important;
+            }
+
+            .text-sm {
+                font-size: 0.875rem !important;
+            }
+
+            /* Ensure panels don't overflow on mobile */
+            .organic-panel {
+                border-radius: 16px !important;
+                padding: 12px !important;
+            }
+        }
+
+        /* Improve slider thumb size for mobile (touch target) */
+        input[type="range"]::-webkit-slider-thumb {
+            min-width: 24px;
+            min-height: 36px;
+        }
+
+        /* Touch-friendly tool buttons - increase spacing */
+        .tool-btn {
+            min-height: 56px;
+            padding: 12px 16px;
+            white-space: normal !important; /* Allow text wrapping on mobile */
+            justify-content: flex-start !important; /* Align to top for better visibility */
+        }
+
+        /* Prevent canvas from being too large on tablets */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            body > div {
+                max-width: 95vw !important;
+            }
+        }
+
+        /* --- MOBILE OPTIMIZATIONS END --- */
         .mono { font-family: 'Inconsolata', monospace; font-size: 1rem; }
         
         ::-webkit-scrollbar { width: 6px; }
@@ -138,9 +242,11 @@
             </div>
 
             <!-- Canvas Window -->
-            <div class="relative flex-grow flex items-center justify-center bg-black/40 organic-subpanel overflow-hidden shadow-inner">
+            <div class="relative flex-grow flex items-center justify-center bg-black/40 organic-subpanel overflow-hidden shadow-inner" id="canvas-container">
                 <canvas id="sim-canvas" width="600" height="600" class="max-w-full max-h-full object-contain touch-manipulation pointer-events-auto"></canvas>
             </div>
+
+            <!-- Canvas sizing happens in init() -->
         </div>
 
         <!-- Interventions Panel (Cellular Panel) -->
@@ -185,6 +291,27 @@
     <script>
         const canvas = document.getElementById('sim-canvas');
         const ctx = canvas.getContext('2d');
+
+        // Responsive canvas that scales to container while maintaining resolution
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            if (!container) return;
+
+            // Get the display size from the container (respects CSS max-width/max-height)
+            const displayWidth = container.clientWidth;
+            const displayHeight = container.clientHeight;
+
+            // Set display size
+            canvas.style.width = `${displayWidth}px`;
+            canvas.style.height = `${displayHeight}px`;
+
+            // Keep internal resolution high for clarity, but scale via CSS
+            // This prevents blurriness while still being responsive
+        }
+
+        // Run resize on load and window resize events
+        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
 
         const GRID_SIZE = 40;
         const CELL_SIZE = canvas.width / GRID_SIZE;
@@ -894,11 +1021,43 @@
             }, time);
         }
 
+        // MOBILE TOUCH SUPPORT: Better mobile responsiveness with unified pointer events
         canvas.addEventListener('pointerdown', async (e) => {
+            e.preventDefault(); // Prevent scrolling during canvas interaction
             await initAudio(); // Safely unlock Web Audio on first interaction
             const rect = canvas.getBoundingClientRect();
-            const x = Math.floor(((e.clientX - rect.left) * (canvas.width / rect.width)) / CELL_SIZE);
-            const y = Math.floor(((e.clientY - rect.top) * (canvas.height / rect.height)) / CELL_SIZE);
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor(((e.touches[0].clientX - rect.left) * scaleX) / CELL_SIZE);
+            const y = Math.floor(((e.touches[0].clientY - rect.top) * scaleY) / CELL_SIZE);
+            handleCanvasInteraction(x, y);
+        }, { passive: false });
+
+        // Also support pointer events (works on both mouse and touch devices)
+        canvas.addEventListener('pointerdown', async (e) => {
+            e.preventDefault();
+            await initAudio();
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor(((e.clientX - rect.left) * scaleX) / CELL_SIZE);
+            const y = Math.floor(((e.clientY - rect.top) * scaleY) / CELL_SIZE);
+            handleCanvasInteraction(x, y);
+        }, { passive: false });
+
+        // Fallback to mouse events for desktop
+        canvas.addEventListener('mousedown', async (e) => {
+            await initAudio();
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = Math.floor(((e.clientX - rect.left) * scaleX) / CELL_SIZE);
+            const y = Math.floor(((e.clientY - rect.top) * scaleY) / CELL_SIZE);
+            handleCanvasInteraction(x, y);
+        });
+
+        function handleCanvasInteraction(x, y) {
             if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
 
             const clickedOrg = organisms.find(o => o.tendrils.some(t => t.x === x && t.y === y));
@@ -922,7 +1081,7 @@
             }
             
             updateUI();
-        });
+        }
 
         document.querySelectorAll('.tool-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
