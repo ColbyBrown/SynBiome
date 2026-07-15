@@ -114,39 +114,39 @@
         <p id="biome-label" class="text-[#cbd5e1] text-lg tracking-wider opacity-90">Biome: Loading...</p>
     </header>
 
-    <div class="flex flex-col md:flex-row gap-6 w-full max-w-6xl h-[700px]">
-        
+    <div class="flex flex-col md:flex-row gap-6 w-full max-w-6xl h-[calc(100vh-8rem)]">
+
         <!-- Canvas Container (Cellular Panel) -->
-        <div class="flex-grow organic-panel p-5 flex flex-col relative overflow-hidden">
-            
+        <div class="flex-grow lg:mr-80 organic-panel p-5 flex flex-col relative overflow-hidden">
+
             <!-- Sleek Top Control Bar -->
             <div class="flex justify-between items-center mb-5 bg-black/20 organic-subpanel p-3">
                 <div class="flex gap-3">
-                    <button id="btn-play" class="organic-btn bg-[var(--ui-accent)] text-black px-7 py-2.5 font-bold tracking-widest uppercase text-sm shadow-[0_0_20px_var(--ui-glow)]">▶ Wake</button>
-                    <button id="btn-pause" class="organic-btn bg-white/10 text-white px-7 py-2.5 font-bold tracking-widest uppercase text-sm hover:bg-white/20 hidden">⏸ Slumber</button>
+                    <button id="btn-play" class="organic-btn bg-[var(--ui-accent)] text-black px-7 py-2.5 font-bold tracking-widest uppercase text-sm shadow-[0_0_20px_var(--ui-glow)] active:scale-95 touch-manipulation min-h-[44px]">▶ Wake</button>
+                    <button id="btn-pause" class="organic-btn bg-white/10 text-white px-7 py-2.5 font-bold tracking-widest uppercase text-sm hover:bg-white/20 hidden active:scale-95 touch-manipulation min-h-[44px]">⏸ Slumber</button>
                 </div>
-                
+
                 <div class="flex items-center gap-4 bg-black/20 px-5 py-2 organic-subpanel">
                     <span class="text-sm text-[#94a3b8] italic">Flow Rate</span>
-                    <input type="range" id="bpm-slider" min="60" max="180" value="90" class="w-32">
+                    <input type="range" id="bpm-slider" min="60" max="180" value="90" class="w-32 touch-manipulation">
                     <span id="bpm-display" class="mono text-[var(--ui-accent)] font-bold text-lg w-8 text-right drop-shadow-md">90</span>
                 </div>
-                
+
                 <div class="bg-black/20 px-5 py-2 organic-subpanel text-[#94a3b8] text-sm italic">
                     Cycle <span id="step-counter" class="text-[var(--ui-accent)] mono text-lg ml-2 drop-shadow-md">0</span><span class="opacity-50">/16</span>
                 </div>
             </div>
-            
+
             <!-- Canvas Window -->
             <div class="relative flex-grow flex items-center justify-center bg-black/40 organic-subpanel overflow-hidden shadow-inner">
-                <canvas id="sim-canvas" width="600" height="600" class="max-w-full max-h-full object-contain"></canvas>
+                <canvas id="sim-canvas" width="600" height="600" class="max-w-full max-h-full object-contain touch-manipulation pointer-events-auto"></canvas>
             </div>
         </div>
 
         <!-- Interventions Panel (Cellular Panel) -->
-        <div class="w-full md:w-80 organic-panel p-6 flex flex-col overflow-y-auto">
-            <h2 class="text-xl italic font-bold mb-4 text-[#cbd5e1] border-b border-[var(--cell-wall)] pb-3">Interventions</h2>
-            
+        <div class="w-full lg:w-80 organic-panel p-5 md:p-4 flex flex-col gap-4 min-h-[44px]">
+            <h2 class="text-xl italic font-bold mb-3 text-[#cbd5e1] border-b border-[var(--cell-wall)] pb-3">Interventions</h2>
+
             <!-- Tool Buttons -->
             <div class="flex flex-col gap-3 mb-6">
                 <button id="tool-seed" class="tool-btn bg-black/20 organic-subpanel text-[#e2e8f0] px-5 py-4 font-semibold transition-all text-left flex justify-between items-center hover:bg-white/5">
@@ -894,7 +894,7 @@
             }, time);
         }
 
-        canvas.addEventListener('mousedown', async (e) => {
+        canvas.addEventListener('pointerdown', async (e) => {
             await initAudio(); // Safely unlock Web Audio on first interaction
             const rect = canvas.getBoundingClientRect();
             const x = Math.floor(((e.clientX - rect.left) * (canvas.width / rect.width)) / CELL_SIZE);
